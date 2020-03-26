@@ -32,6 +32,14 @@ func NewLwdStreamer(cache *common.BlockCache) (walletrpc.CompactTxStreamerServer
 	return &LwdStreamer{cache}, nil
 }
 
+type DarksideStreamer struct {
+	cache *common.BlockCache
+}
+
+func NewDarksideStreamer(cache *common.BlockCache) (walletrpc.DarksideStreamerServer, error) {
+	return &DarksideStreamer{cache}, nil
+}
+
 // GetLatestBlock returns the height of the best chain, according to zcashd.
 func (s *LwdStreamer) GetLatestBlock(ctx context.Context, placeholder *walletrpc.ChainSpec) (*walletrpc.BlockID, error) {
 	latestBlock := s.cache.GetLatestHeight()
@@ -185,6 +193,9 @@ func (s *LwdStreamer) GetTransaction(ctx context.Context, txf *walletrpc.TxFilte
 // GetLightdInfo gets the LightWalletD (this server) info, and includes information
 // it gets from its backend zcashd.
 func (s *LwdStreamer) GetLightdInfo(ctx context.Context, in *walletrpc.Empty) (*walletrpc.LightdInfo, error) {
+	if common.DarksideEnable {
+		return common.DarksideGetLightdInfo(), nil
+	}
 	saplingHeight, blockHeight, chainName, consensusBranchId := common.GetSaplingInfo()
 
 	return &walletrpc.LightdInfo{
@@ -257,65 +268,15 @@ func (s *LwdStreamer) Ping(ctx context.Context, in *walletrpc.Duration) (*wallet
 }
 
 // Darkside
-func (s *LwdStreamer) DarksideGetIncomingTransactions(in *walletrpc.Empty, resp walletrpc.CompactTxStreamer_DarksideGetIncomingTransactionsServer) error {
-	// Get all of the new incoming transactions evil zcashd has accepted.
-	result, rpcErr := common.RawRequest("x_getincomingtransactions", nil)
-
-	var new_txs []string
-	if rpcErr != nil {
-		return rpcErr
-	}
-	err := json.Unmarshal(result, &new_txs)
-
-	if err != nil {
-		return err
-	}
-
-	for _, tx_str := range new_txs {
-		tx_bytes, err := hex.DecodeString(tx_str)
-		if err != nil {
-			return err
-		}
-		err = resp.Send(&walletrpc.RawTransaction{Data: tx_bytes, Height: 0})
-		if err != nil {
-			return err
-		}
-	}
-
+func (s *DarksideStreamer) DarksideGetIncomingTransactions(in *walletrpc.Empty, resp walletrpc.DarksideStreamer_DarksideGetIncomingTransactionsServer) error {
+	// TODO
 	return nil
 }
 
-func (s *LwdStreamer) DarksideSetState(ctx context.Context, state *walletrpc.DarksideLightwalletdState) (*walletrpc.Empty, error) {
-	match, err := regexp.Match("\\A[a-zA-Z0-9]+\\z", []byte(state.BranchID))
-	if err != nil || !match {
-		return nil, errors.New("Invalid branch ID")
+func (s *DarksideStreamer) DarksideSetState(ctx context.Context, state *walletrpc.DarksideState) (*walletrpc.Empty, error) {
+	if !common.DarksideEnable {
+		return nil, errors.New("Darkside not enabled")
 	}
-
-	match, err = regexp.Match("\\A[a-zA-Z0-9]+\\z", []byte(state.ChainName))
-	if err != nil || !match {
-		return nil, errors.New("Invalid chain name")
-	}
-
-	st := "{" +
-		"\"start_height\": " + strconv.Itoa(int(state.StartHeight)) +
-		", \"sapling_activation\": " + strconv.Itoa(int(state.SaplingActivation)) +
-		", \"branch_id\": \"" + state.BranchID + "\"" +
-		", \"chain_name\": \"" + state.ChainName + "\"" +
-		", \"blocks\": ["
-
-	for i, block := range state.Blocks {
-		st += "\"" + block + "\""
-		if i < len(state.Blocks)-1 {
-			st += ", "
-		}
-	}
-
-	st += "]}"
-
-	params := make([]json.RawMessage, 1)
-	params[0] = json.RawMessage(st)
-
-	_, rpcErr := common.RawRequest("x_setstate", params)
-
-	return &walletrpc.Empty{}, rpcErr
+	common.DarksideSetState(state)
+	return &walletrpc.Empty{}, nil
 }

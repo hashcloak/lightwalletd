@@ -202,6 +202,21 @@
         
           
           <li>
+            <a href="#darkside.proto">darkside.proto</a>
+            <ul>
+              
+              
+              
+              
+                <li>
+                  <a href="#cash.z.wallet.sdk.rpc.DarksideStreamer"><span class="badge">S</span>DarksideStreamer</a>
+                </li>
+              
+            </ul>
+          </li>
+        
+          
+          <li>
             <a href="#service.proto">service.proto</a>
             <ul>
               
@@ -461,6 +476,47 @@ in a pure-Sapling context, the fee will be calculable as:
       
 
       
+    
+      
+      <div class="file-heading">
+        <h2 id="darkside.proto">darkside.proto</h2><a href="#title">Top</a>
+      </div>
+      <p></p>
+
+      
+
+      
+
+      
+
+      
+        <h3 id="cash.z.wallet.sdk.rpc.DarksideStreamer">DarksideStreamer</h3>
+        <p>Darkside (testing, see --darkside-very-insecure):</p>
+        <table class="enum-table">
+          <thead>
+            <tr><td>Method Name</td><td>Request Type</td><td>Response Type</td><td>Description</td></tr>
+          </thead>
+          <tbody>
+            
+              <tr>
+                <td>DarksideGetIncomingTransactions</td>
+                <td><a href="#cash.z.wallet.sdk.rpc.Empty">Empty</a></td>
+                <td><a href="#cash.z.wallet.sdk.rpc.RawTransaction">RawTransaction</a> stream</td>
+                <td><p>Return the list of transactions that have been submitted (via SendTransaction).</p></td>
+              </tr>
+            
+              <tr>
+                <td>DarksideSetState</td>
+                <td><a href="#cash.z.wallet.sdk.rpc.LightdInfo">LightdInfo</a></td>
+                <td><a href="#cash.z.wallet.sdk.rpc.Empty">Empty</a></td>
+                <td><p>Set the information that GetLightdInfo returns, except that chainName specifies
+a file of blocks within testdata/darkside that GetBlock will return.</p></td>
+              </tr>
+            
+          </tbody>
+        </table>
+
+        
     
       
       <div class="file-heading">

@@ -32,7 +32,7 @@ type Options struct {
 	NoTLSVeryInsecure bool   `json:"no_tls_very_insecure,omitempty"`
 	Redownload        bool   `json:"redownload"`
 	DataDir           string `json:"data-dir"`
-	DarkSide          bool   `json:"darkside"`
+	Darkside          bool   `json:"darkside"`
 }
 
 // RawRequest points to the function to send a an RPC request to zcashd;
@@ -51,6 +51,9 @@ var Log *logrus.Entry
 // GetSaplingInfo returns the result of the getblockchaininfo RPC to zcashd
 func GetSaplingInfo() (int, int, string, string) {
 	// This request must succeed or we can't go on; give zcashd time to start up
+	if DarksideEnable {
+		return DarksideGetSaplingInfo()
+	}
 	var f interface{}
 	retryCount := 0
 	for {
@@ -94,6 +97,15 @@ func GetSaplingInfo() (int, int, string, string) {
 }
 
 func getBlockFromRPC(height int) (*walletrpc.CompactBlock, error) {
+	if DarksideEnable {
+		if height > int(darksideState.ldinfo.BlockHeight) {
+			// Simulate that we don't have this height yet
+			return nil, nil
+		}
+		i := height - int(darksideState.ldinfo.SaplingActivationHeight)
+		return &darksideState.cblocks[i], nil
+	}
+
 	params := make([]json.RawMessage, 2)
 	params[0] = json.RawMessage("\"" + strconv.Itoa(height) + "\"")
 	params[1] = json.RawMessage("0") // non-verbose (raw hex)
@@ -162,7 +174,7 @@ func BlockIngestor(c *BlockCache, rep int) {
 			}
 			// Delay then retry the same height.
 			c.Sync()
-			Sleep(10 * time.Second)
+			Sleep(2 * time.Second)
 			wait = true
 			continue
 		}
@@ -172,7 +184,7 @@ func BlockIngestor(c *BlockCache, rep int) {
 			if wait {
 				// Wait a bit then retry the same height.
 				c.Sync()
-				Sleep(10 * time.Second)
+				Sleep(2 * time.Second)
 				wait = false
 				continue
 			}

@@ -7,3 +7,6 @@ coverage.out
 test-log
 lwd-api.html
 *.orig
+genblocks
+db
+__debug_bin

@@ -4,154 +4,104 @@ import (
 	"bufio"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/zcash/lightwalletd/walletrpc"
 )
 
-type DarksideZcashdState struct {
-	start_height       int
-	sapling_activation int
-	branch_id          string
-	chain_name         string
-	// Should always be nonempty. Index 0 is the block at height start_height.
-	blocks                []string
+var DarksideEnable bool
+
+var darksideState struct {
+	ldinfo                walletrpc.LightdInfo
+	cblocks               []walletrpc.CompactBlock
 	incoming_transactions [][]byte
 	server_start          time.Time
 }
 
-var state *DarksideZcashdState = nil
+func DarksideInit() {
+	DarksideEnable = true
+	// Hard-code for mainnet, at least for now
+	darksideState.ldinfo.Version = "0"
+	darksideState.ldinfo.Vendor = "ECC Darkside"
+	darksideState.ldinfo.TaddrSupport = true
+	darksideState.ldinfo.ChainName = "main"
+	darksideState.ldinfo.ConsensusBranchId = "2bb40e60"
 
-func DarkSideRawRequest(method string, params []json.RawMessage) (json.RawMessage, error) {
-
-	if state == nil {
-		state = &DarksideZcashdState{
-			start_height:          1000,
-			sapling_activation:    1000,
-			branch_id:             "2bb40e60",
-			chain_name:            "main",
-			blocks:                make([]string, 0),
-			incoming_transactions: make([][]byte, 0),
-			server_start:          time.Now(),
-		}
-
-		testBlocks, err := os.Open("./testdata/default-darkside-blocks")
-		if err != nil {
-			Log.Fatal("Error loading default darksidewalletd blocks")
-		}
-		scan := bufio.NewScanner(testBlocks)
-		for scan.Scan() { // each line (block)
-			block := scan.Bytes()
-			state.blocks = append(state.blocks, string(block))
-		}
+	testBlocks, err := os.Open("./testdata/darkside-cblocks")
+	if err != nil {
+		Log.Fatal("Error loading default darksidewalletd blocks")
 	}
-
-	if time.Now().Sub(state.server_start).Minutes() >= 30 {
-		Log.Fatal("Shutting down darksidewalletd to prevent accidental deployment in production.")
-	}
-
-	switch method {
-	case "getblockchaininfo":
-		// TODO: there has got to be a better way to construct this!
-		data := make(map[string]interface{})
-		data["chain"] = state.chain_name
-		data["upgrades"] = make(map[string]interface{})
-		data["upgrades"].(map[string]interface{})["76b809bb"] = make(map[string]interface{})
-		data["upgrades"].(map[string]interface{})["76b809bb"].(map[string]interface{})["activationheight"] = state.sapling_activation
-		data["headers"] = state.start_height + len(state.blocks) - 1
-		data["consensus"] = make(map[string]interface{})
-		data["consensus"].(map[string]interface{})["nextblock"] = state.branch_id
-
-		return json.Marshal(data)
-
-	case "getblock":
-		var height string
-		err := json.Unmarshal(params[0], &height)
-		if err != nil {
-			return nil, errors.New("Failed to parse getblock request.")
-		}
-
-		height_i, err := strconv.Atoi(height)
-		if err != nil {
-			return nil, errors.New("Error parsing height as integer.")
-		}
-		index := height_i - state.start_height
-
-		if index == len(state.blocks) {
-			// The current ingestor keeps going until it sees this error,
-			// meaning it's up to the latest height.
-			return nil, errors.New("-8:")
-		}
-
-		if index < 0 || index > len(state.blocks) {
-			// If an integration test can reach this, it could be a bug, so generate an error.
-			Log.Errorf("getblock request made for out-of-range height %d (have %d to %d)", height_i, state.start_height, state.start_height+len(state.blocks)-1)
-			return nil, errors.New("-8:")
-		}
-
-		return []byte("\"" + state.blocks[index] + "\""), nil
-
-	case "getaddresstxids":
-		// Not required for minimal reorg testing.
-		return nil, errors.New("Not implemented yet.")
-
-	case "getrawtransaction":
-		// Not required for minimal reorg testing.
-		return nil, errors.New("Not implemented yet.")
-
-	case "sendrawtransaction":
-		var rawtx string
-		err := json.Unmarshal(params[0], &rawtx)
-		if err != nil {
-			return nil, errors.New("Failed to parse sendrawtransaction JSON.")
-		}
-		txbytes, err := hex.DecodeString(rawtx)
-		if err != nil {
-			return nil, errors.New("Failed to parse sendrawtransaction value as a hex string.")
-		}
-		state.incoming_transactions = append(state.incoming_transactions, txbytes)
-		return nil, nil
-
-	case "x_setstate":
-		var new_state map[string]interface{}
-
-		err := json.Unmarshal(params[0], &new_state)
-		if err != nil {
-			Log.Fatal("Could not unmarshal the provided state.")
-		}
-
-		block_strings := make([]string, 0)
-		for _, block_str := range new_state["blocks"].([]interface{}) {
-			block_strings = append(block_strings, block_str.(string))
-		}
-
-		state = &DarksideZcashdState{
-			start_height:          int(new_state["start_height"].(float64)),
-			sapling_activation:    int(new_state["sapling_activation"].(float64)),
-			branch_id:             new_state["branch_id"].(string),
-			chain_name:            new_state["chain_name"].(string),
-			blocks:                block_strings,
-			incoming_transactions: state.incoming_transactions,
-			server_start:          state.server_start,
-		}
-
-		return nil, nil
-
-	case "x_getincomingtransactions":
-		txlist := "["
-		for i, tx := range state.incoming_transactions {
-			txlist += "\"" + hex.EncodeToString(tx) + "\""
-			// add commas after all but the last
-			if i < len(state.incoming_transactions)-1 {
-				txlist += ", "
+	scan := bufio.NewScanner(testBlocks)
+	var height int
+	for scan.Scan() { // each line (first line height, then blocks)
+		if height == 0 {
+			// first line is starting height of the blocks that follow
+			height, err = strconv.Atoi(string(scan.Bytes()))
+			if err != nil {
+				Log.Fatal("Error loading BlockHeight from darkside-cblocks")
 			}
+			darksideState.ldinfo.SaplingActivationHeight = uint64(height)
+			darksideState.ldinfo.BlockHeight = uint64(height)
+			continue
 		}
-		txlist += "]"
-
-		return []byte(txlist), nil
-
-	default:
-		return nil, errors.New("There was an attempt to call an unsupported RPC.")
+		d, err := hex.DecodeString(string(scan.Bytes()))
+		if err != nil {
+			Log.Fatal("Error decoding block from darkside-cblocks")
+		}
+		var cb walletrpc.CompactBlock
+		err = json.Unmarshal(d, &cb)
+		if err != nil {
+			Log.Fatal("Error unmarshalling block from darkside-cblocks")
+		}
+		if int(cb.Height) != height {
+			Log.Fatal("Error, unexpected coinbase height from darkside-cblocks")
+		}
+		height++
+		darksideState.cblocks = append(darksideState.cblocks, cb)
 	}
+}
+
+func DarksideGetSaplingInfo() (int, int, string, string) {
+	return int(darksideState.ldinfo.SaplingActivationHeight),
+		int(darksideState.ldinfo.BlockHeight),
+		darksideState.ldinfo.ChainName,
+		darksideState.ldinfo.ConsensusBranchId
+}
+
+func DarksideGetLightdInfo() *walletrpc.LightdInfo {
+	return &darksideState.ldinfo
+}
+
+// Setting reorg to X means simulates a new version of X, but it has the same
+// predecessor (parent), i.e., its hash changes but not its prevhash.
+// All blocks following X have both their hash and prevhash updated.
+func DarksideSetState(state *walletrpc.DarksideState) {
+	sapling := darksideState.ldinfo.SaplingActivationHeight
+	if state.LatestHeight < sapling {
+		Log.Fatal("DarksideSetState: latestHeight can't be less than sapling")
+	}
+	if int(state.LatestHeight-sapling) >= len(darksideState.cblocks) {
+		Log.Fatal("DarksideSetState: latestHeight too high")
+	}
+	if int(state.ReorgHeight-sapling) >= len(darksideState.cblocks) {
+		Log.Fatal("DarksideSetState: reorgHeight too high")
+	}
+	if state.ReorgHeight > 0 {
+		if state.ReorgHeight < sapling {
+			Log.Fatal("DarksideSetState: reorgHeight can't be less than sapling")
+		}
+		var prevHash *byte
+		for h := int(state.ReorgHeight - sapling); h < len(darksideState.cblocks); h++ {
+			cblock := &darksideState.cblocks[h]
+			// Changing the hash in any way simulates a new version of the block.
+			cblock.Hash[0]++
+			if prevHash != nil {
+				cblock.PrevHash[0] = *prevHash
+			}
+			prevHash = &cblock.Hash[0]
+		}
+	}
+	darksideState.ldinfo.BlockHeight = state.LatestHeight
 }
