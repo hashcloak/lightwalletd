@@ -55,6 +55,9 @@ func (s *LwdStreamer) GetLatestBlock(ctx context.Context, placeholder *walletrpc
 // GetAddressTxids is a streaming RPC that returns transaction IDs that have
 // the given transparent address (taddr) as either an input or output.
 func (s *LwdStreamer) GetAddressTxids(addressBlockFilter *walletrpc.TransparentAddressBlockFilter, resp walletrpc.CompactTxStreamer_GetAddressTxidsServer) error {
+	if common.DarksideEnable {
+		return errors.New("GetAddressTxids in darkside mode not yet implemented")
+	}
 	// Test to make sure Address is a single t address
 	match, err := regexp.Match("\\At[a-zA-Z0-9]{34}\\z", []byte(addressBlockFilter.Address))
 	if err != nil || !match {
@@ -153,6 +156,9 @@ func (s *LwdStreamer) GetBlockRange(span *walletrpc.BlockRange, resp walletrpc.C
 // GetTransaction returns the raw transaction bytes that are returned
 // by the zcashd 'getrawtransaction' RPC.
 func (s *LwdStreamer) GetTransaction(ctx context.Context, txf *walletrpc.TxFilter) (*walletrpc.RawTransaction, error) {
+	if common.DarksideEnable {
+		return nil, errors.New("GetTransaction in darkside mode not yet implemented")
+	}
 	if txf.Hash != nil {
 		txid := txf.Hash
 		for left, right := 0, len(txid)-1; left < right; left, right = left+1, right-1 {
@@ -223,6 +229,9 @@ func (s *LwdStreamer) SendTransaction(ctx context.Context, rawtx *walletrpc.RawT
 	//
 	// Result:
 	// "hex"             (string) The transaction hash in hex
+	if common.DarksideEnable {
+		return nil, errors.New("SendTransaction in darkside mode not yet implemented")
+	}
 
 	// Construct raw JSON-RPC params
 	params := make([]json.RawMessage, 1)
