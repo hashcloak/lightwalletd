@@ -156,9 +156,6 @@ func (s *LwdStreamer) GetBlockRange(span *walletrpc.BlockRange, resp walletrpc.C
 // GetTransaction returns the raw transaction bytes that are returned
 // by the zcashd 'getrawtransaction' RPC.
 func (s *LwdStreamer) GetTransaction(ctx context.Context, txf *walletrpc.TxFilter) (*walletrpc.RawTransaction, error) {
-	if common.DarksideEnable {
-		return nil, errors.New("GetTransaction in darkside mode not yet implemented")
-	}
 	if txf.Hash != nil {
 		txid := txf.Hash
 		for left, right := 0, len(txid)-1; left < right; left, right = left+1, right-1 {
@@ -166,17 +163,26 @@ func (s *LwdStreamer) GetTransaction(ctx context.Context, txf *walletrpc.TxFilte
 		}
 		leHashString := hex.EncodeToString(txid)
 
-		params := []json.RawMessage{
-			json.RawMessage("\"" + leHashString + "\""),
-			json.RawMessage("1"),
-		}
+		var result json.RawMessage
+		var rpcErr error
+		if common.DarksideEnable {
+			if result = common.DarksideGetTransaction(leHashString); result == nil {
+				common.Log.Errorf("GetTransaction error: transaction not found")
+				return nil, errors.New("-5")
+			}
+		} else {
+			params := []json.RawMessage{
+				json.RawMessage("\"" + leHashString + "\""),
+				json.RawMessage("1"),
+			}
 
-		result, rpcErr := common.RawRequest("getrawtransaction", params)
+			result, rpcErr = common.RawRequest("getrawtransaction", params)
 
-		// For some reason, the error responses are not JSON
-		if rpcErr != nil {
-			common.Log.Errorf("GetTransaction error: %s", rpcErr.Error())
-			return nil, errors.New((strings.Split(rpcErr.Error(), ":"))[0])
+			// For some reason, the error responses are not JSON
+			if rpcErr != nil {
+				common.Log.Errorf("GetTransaction error: %s", rpcErr.Error())
+				return nil, errors.New((strings.Split(rpcErr.Error(), ":"))[0])
+			}
 		}
 		var txinfo interface{}
 		err := json.Unmarshal(result, &txinfo)

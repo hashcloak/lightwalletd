@@ -2,10 +2,8 @@ package common
 
 import (
 	"bufio"
-	"encoding/hex"
 	"encoding/json"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/zcash/lightwalletd/walletrpc"
@@ -15,7 +13,8 @@ var DarksideEnable bool
 
 var darksideState struct {
 	ldinfo                walletrpc.LightdInfo
-	cblocks               []walletrpc.CompactBlock
+	cblocks               []*walletrpc.CompactBlock
+	transactions          map[string][]byte // txid: txdata
 	incoming_transactions [][]byte
 	server_start          time.Time
 }
@@ -29,37 +28,45 @@ func DarksideInit() {
 	darksideState.ldinfo.ChainName = "main"
 	darksideState.ldinfo.ConsensusBranchId = "2bb40e60"
 
-	testBlocks, err := os.Open("./testdata/darkside-cblocks")
-	if err != nil {
-		Log.Fatal("Error loading default darksidewalletd blocks")
-	}
-	scan := bufio.NewScanner(testBlocks)
-	var height int
-	for scan.Scan() { // each line (first line height, then blocks)
-		if height == 0 {
-			// first line is starting height of the blocks that follow
-			height, err = strconv.Atoi(string(scan.Bytes()))
+	{
+		testBlocks, err := os.Open("./testdata/darkside-cblocks")
+		if err != nil {
+			Log.Fatal("Error loading darksidewalletd blocks")
+		}
+		scan := bufio.NewScanner(testBlocks)
+		for scan.Scan() { // each line is a JSON-formatted compact block
+			var cb walletrpc.CompactBlock
+			err = json.Unmarshal(scan.Bytes(), &cb)
 			if err != nil {
-				Log.Fatal("Error loading BlockHeight from darkside-cblocks")
+				Log.Fatal("Error unmarshalling block from darkside-cblocks")
 			}
-			darksideState.ldinfo.SaplingActivationHeight = uint64(height)
-			darksideState.ldinfo.BlockHeight = uint64(height)
-			continue
+			// Pretend the first block in the file is the Sapling height.
+			if darksideState.ldinfo.SaplingActivationHeight == 0 {
+				darksideState.ldinfo.SaplingActivationHeight = cb.Height
+			}
+			darksideState.ldinfo.BlockHeight = cb.Height
+			darksideState.cblocks = append(darksideState.cblocks, &cb)
 		}
-		d, err := hex.DecodeString(string(scan.Bytes()))
+	}
+
+	{
+		darksideState.transactions = make(map[string][]byte)
+		testTx, err := os.Open("./testdata/darkside-transactions")
 		if err != nil {
-			Log.Fatal("Error decoding block from darkside-cblocks")
+			Log.Fatal("Error loading default darksidewalletd transactions")
 		}
-		var cb walletrpc.CompactBlock
-		err = json.Unmarshal(d, &cb)
-		if err != nil {
-			Log.Fatal("Error unmarshalling block from darkside-cblocks")
+		scan := bufio.NewScanner(testTx)
+		for scan.Scan() { // each line
+			txJSON := scan.Bytes()
+			var txinfo interface{}
+			err = json.Unmarshal(txJSON, &txinfo)
+			if err != nil {
+				Log.Fatal("Error unmarshalling block from darkside-transactions")
+			}
+			txid := txinfo.(map[string]interface{})["txid"].(string)
+			darksideState.transactions[txid] = make([]byte, len(txJSON))
+			copy(darksideState.transactions[txid], txJSON)
 		}
-		if int(cb.Height) != height {
-			Log.Fatal("Error, unexpected coinbase height from darkside-cblocks")
-		}
-		height++
-		darksideState.cblocks = append(darksideState.cblocks, cb)
 	}
 }
 
@@ -72,6 +79,13 @@ func DarksideGetSaplingInfo() (int, int, string, string) {
 
 func DarksideGetLightdInfo() *walletrpc.LightdInfo {
 	return &darksideState.ldinfo
+}
+
+func DarksideGetTransaction(txid string) []byte {
+	if t, ok := darksideState.transactions[txid]; ok {
+		return t
+	}
+	return nil
 }
 
 // Setting reorg to X means simulates a new version of X, but it has the same
@@ -94,7 +108,7 @@ func DarksideSetState(state *walletrpc.DarksideState) {
 		}
 		var prevHash *byte
 		for h := int(state.ReorgHeight - sapling); h < len(darksideState.cblocks); h++ {
-			cblock := &darksideState.cblocks[h]
+			cblock := darksideState.cblocks[h]
 			// Changing the hash in any way simulates a new version of the block.
 			cblock.Hash[0]++
 			if prevHash != nil {

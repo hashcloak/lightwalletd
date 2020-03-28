@@ -103,7 +103,7 @@ func getBlockFromRPC(height int) (*walletrpc.CompactBlock, error) {
 			return nil, nil
 		}
 		i := height - int(darksideState.ldinfo.SaplingActivationHeight)
-		return &darksideState.cblocks[i], nil
+		return darksideState.cblocks[i], nil
 	}
 
 	params := make([]json.RawMessage, 2)

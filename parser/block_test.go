@@ -68,12 +68,12 @@ func TestBlockParser(t *testing.T) {
 			t.Error("Number of transactions mismatch")
 			break
 		}
-		if block.HasSaplingTransactions() {
+		if block.HasSaplingElements() {
 			t.Error("Unexpected Saping tx")
 			break
 		}
 		for _, tx := range block.Transactions() {
-			if tx.HasSaplingTransactions() {
+			if tx.HasSaplingElements() {
 				t.Error("Unexpected Saping tx")
 				break
 			}
