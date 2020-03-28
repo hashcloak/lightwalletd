@@ -111,6 +111,21 @@ func genfiles() string {
 				if rpcErr != nil {
 					return fmt.Sprint("rpcClient.RawRequest GetTransaction error: ", rpcErr)
 				}
+				// We could just write 'result' out to the file here, but every time you
+				// run this tool, the confirmation counts all change, and since this file
+				// is source-controlled, every line is changed. So this will set the
+				// confirmations to an arbitrary constant (it shouldn't matter what this
+				// value is to any code that makes decisions).
+				var txinfo interface{}
+				err := json.Unmarshal(result, &txinfo)
+				if err != nil {
+					return fmt.Sprint("can't unmarshal transaction, error: ", rpcErr)
+				}
+				txinfo.(map[string]interface{})["confirmations"] = 113943
+				result, err = json.Marshal(txinfo)
+				if err != nil {
+					return fmt.Sprint("can't marshal transaction, error: ", rpcErr)
+				}
 				ftx.WriteString(string(result) + "\n")
 			}
 		}
