@@ -43,8 +43,8 @@ func DarksideInit() {
 			// Pretend the first block in the file is the Sapling height.
 			if darksideState.ldinfo.SaplingActivationHeight == 0 {
 				darksideState.ldinfo.SaplingActivationHeight = cb.Height
+				darksideState.ldinfo.BlockHeight = cb.Height
 			}
-			darksideState.ldinfo.BlockHeight = cb.Height
 			darksideState.cblocks = append(darksideState.cblocks, &cb)
 		}
 	}
@@ -94,17 +94,17 @@ func DarksideGetTransaction(txid string) []byte {
 func DarksideSetState(state *walletrpc.DarksideState) {
 	sapling := darksideState.ldinfo.SaplingActivationHeight
 	if state.LatestHeight < sapling {
-		Log.Fatal("DarksideSetState: latestHeight can't be less than sapling")
+		Log.Fatal("DarksideSetState: latestHeight ", state.LatestHeight, " can't be less than sapling ", sapling)
 	}
 	if int(state.LatestHeight-sapling) >= len(darksideState.cblocks) {
-		Log.Fatal("DarksideSetState: latestHeight too high")
+		Log.Fatal("DarksideSetState: latestHeight ", state.LatestHeight, " is too high, max ", int(sapling)+len(darksideState.cblocks)-1)
 	}
 	if int(state.ReorgHeight-sapling) >= len(darksideState.cblocks) {
-		Log.Fatal("DarksideSetState: reorgHeight too high")
+		Log.Fatal("DarksideSetState: reorgHeight ", state.ReorgHeight, " is too high, max ", int(sapling)+len(darksideState.cblocks)-1)
 	}
 	if state.ReorgHeight > 0 {
 		if state.ReorgHeight < sapling {
-			Log.Fatal("DarksideSetState: reorgHeight can't be less than sapling")
+			Log.Fatal("DarksideSetState: reorgHeight ", state.ReorgHeight, " can't be less than sapling ", sapling)
 		}
 		var prevHash *byte
 		for h := int(state.ReorgHeight - sapling); h < len(darksideState.cblocks); h++ {
