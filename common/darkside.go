@@ -93,6 +93,7 @@ func DarksideGetTransaction(txid string) []byte {
 // All blocks following X have both their hash and prevhash updated.
 func DarksideSetState(state *walletrpc.DarksideState) {
 	sapling := darksideState.ldinfo.SaplingActivationHeight
+	Log.Info("DarksideSetState(LatestHeight=", state.LatestHeight, " ReorgHeight=", state.ReorgHeight, ")")
 	if state.LatestHeight < sapling {
 		Log.Fatal("DarksideSetState: latestHeight ", state.LatestHeight, " can't be less than sapling ", sapling)
 	}
