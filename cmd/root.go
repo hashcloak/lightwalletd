@@ -149,11 +149,15 @@ func startServer(opts *common.Options) error {
 	saplingHeight, blockHeight, chainName, branchID := common.GetSaplingInfo()
 	common.Log.Info("Got sapling height ", saplingHeight, " block height ", blockHeight, " chain ", chainName, " branchID ", branchID)
 
+	dbPath := filepath.Join(opts.DataDir, "db")
+	if opts.Darkside {
+		os.RemoveAll(filepath.Join(dbPath, chainName))
+	}
+
 	if err := os.MkdirAll(opts.DataDir, 0755); err != nil {
 		os.Stderr.WriteString(fmt.Sprintf("\n  ** Can't create data directory: %s\n\n", opts.DataDir))
 		os.Exit(1)
 	}
-	dbPath := filepath.Join(opts.DataDir, "db")
 	if err := os.MkdirAll(dbPath, 0755); err != nil {
 		os.Stderr.WriteString(fmt.Sprintf("\n  ** Can't create db directory: %s\n\n", dbPath))
 		os.Exit(1)

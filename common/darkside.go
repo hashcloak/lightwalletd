@@ -25,7 +25,7 @@ func DarksideInit() {
 	darksideState.ldinfo.Version = "0"
 	darksideState.ldinfo.Vendor = "ECC Darkside"
 	darksideState.ldinfo.TaddrSupport = true
-	darksideState.ldinfo.ChainName = "main"
+	darksideState.ldinfo.ChainName = "darkside"
 	darksideState.ldinfo.ConsensusBranchId = "2bb40e60"
 
 	{

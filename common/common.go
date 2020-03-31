@@ -216,7 +216,6 @@ func BlockIngestor(c *BlockCache, rep int) {
 			}
 			// Try backing up
 			c.Reorg(height - 1)
-			Sleep(1 * time.Second)
 			continue
 		}
 		// We have a valid block to add.
