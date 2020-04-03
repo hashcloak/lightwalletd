@@ -91,7 +91,7 @@ func DarksideGetTransaction(txid string) []byte {
 // Setting reorg to X means simulates a new version of X, but it has the same
 // predecessor (parent), i.e., its hash changes but not its prevhash.
 // All blocks following X have both their hash and prevhash updated.
-func DarksideSetState(state *walletrpc.DarksideState) {
+func DarksideSetState(cache *BlockCache, state *walletrpc.DarksideState) {
 	sapling := darksideState.ldinfo.SaplingActivationHeight
 	Log.Info("DarksideSetState(LatestHeight=", state.LatestHeight, " ReorgHeight=", state.ReorgHeight, ")")
 	if state.LatestHeight < sapling {
@@ -119,4 +119,7 @@ func DarksideSetState(state *walletrpc.DarksideState) {
 		}
 	}
 	darksideState.ldinfo.BlockHeight = state.LatestHeight
+	for cache.GetLatestHeight() < int(state.LatestHeight) {
+		Sleep(1 * time.Second)
+	}
 }

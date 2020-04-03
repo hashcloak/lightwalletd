@@ -292,6 +292,6 @@ func (s *DarksideStreamer) DarksideSetState(ctx context.Context, state *walletrp
 	if !common.DarksideEnable {
 		return nil, errors.New("Darkside not enabled")
 	}
-	common.DarksideSetState(state)
+	common.DarksideSetState(s.cache, state)
 	return &walletrpc.Empty{}, nil
 }
